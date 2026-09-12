@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>AI議論バトル</title>
+<style>
+  body {
+    font-family: -apple-system, "Hiragino Kaku Gothic ProN", sans-serif;
+    max-width: 640px;
+    margin: 40px auto;
+    padding: 0 16px;
+    background: #f5f6fa;
+    color: #222;
+  }
+  h1 { font-size: 1.6rem; }
+  p.lead { color: #555; }
+  form {
+    display: flex;
+    gap: 8px;
+    margin: 24px 0;
+  }
+  input[type="text"] {
+    flex: 1;
+    padding: 10px 12px;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    font-size: 1rem;
+  }
+  button {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 8px;
+    background: #3b6fe0;
+    color: #fff;
+    font-size: 1rem;
+    cursor: pointer;
+  }
+  button:hover { background: #2f5bc0; }
+  ul { list-style: none; padding: 0; }
+  li {
+    background: #fff;
+    padding: 12px 16px;
+    border-radius: 8px;
+    margin-bottom: 8px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  }
+  li a { text-decoration: none; color: #3b6fe0; font-weight: bold; }
+  li .date { display: block; font-size: 0.8rem; color: #888; margin-top: 2px; }
+</style>
+</head>
+<body>
+  <h1>AI議論バトル</h1>
+  <p class="lead">テーマを入力すると、2体のAI(賛成派 / 反対派)が3分間議論します。</p>
+
+  <form method="post">
+    {% csrf_token %}
+    <input type="text" name="theme" placeholder="例: 在宅勤務は良い制度か" maxlength="200" required autofocus>
+    <button type="submit">議論を始める</button>
+  </form>
+
+  {% if recent_debates %}
+  <h2>これまでの議論</h2>
+  <ul>
+    {% for d in recent_debates %}
+    <li>
+      <a href="{% url 'debate_detail' d.pk %}">{{ d.theme }}</a>
+      <span class="date">{{ d.created_date }}</span>
+    </li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+</body>
+</html>
