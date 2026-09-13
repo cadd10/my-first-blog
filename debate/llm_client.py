@@ -12,7 +12,7 @@ class LLMUnavailable(Exception):
     """Raised when the local LLM server can't be reached or returns garbage."""
 
 
-def chat(system_prompt, user_prompt, max_tokens=200, temperature=0.8):
+def chat(system_prompt, user_prompt, max_tokens=800, temperature=0.8):
     """Send one chat request to a local OpenAI-compatible server (LM Studio).
 
     Falls back to raising LLMUnavailable on any network or shape error so
@@ -42,6 +42,27 @@ def chat(system_prompt, user_prompt, max_tokens=200, temperature=0.8):
         raise LLMUnavailable(f'could not reach local LLM server at {url}: {exc}') from exc
 
     try:
-        return body['choices'][0]['message']['content'].strip()
+        choice = body['choices'][0]
+        message = choice['message']
     except (KeyError, IndexError, TypeError) as exc:
         raise LLMUnavailable(f'unexpected response shape from local LLM server: {body}') from exc
+
+    content = (message.get('content') or '').strip()
+    if content:
+        return content
+
+    # Some "reasoning" models (e.g. DeepSeek-R1 style) put their answer in a
+    # separate reasoning_content field, or spend the whole token budget on
+    # <think>...</think> before ever writing to content. Fall back to that
+    # field and print diagnostics so this is easy to spot in the console.
+    reasoning_content = (message.get('reasoning_content') or '').strip()
+    finish_reason = choice.get('finish_reason')
+    print(
+        '[llm_client] empty content from local LLM server '
+        f'(finish_reason={finish_reason!r}, reasoning_content_length={len(reasoning_content)}); '
+        f'raw message: {message}'
+    )
+    if reasoning_content:
+        return reasoning_content
+
+    raise LLMUnavailable(f'empty response (finish_reason={finish_reason!r})')

@@ -127,7 +127,7 @@ def _generate_verdict(debate, message):
     user_prompt = f'問題: {question_text}\n回答者の答え: {answer_text}'
 
     try:
-        raw = llm_client.chat(system_prompt, user_prompt, max_tokens=300)
+        raw = llm_client.chat(system_prompt, user_prompt, max_tokens=800)
         if not raw:
             raise llm_client.LLMUnavailable('empty response')
         first_line, _, _ = raw.partition('\n')
