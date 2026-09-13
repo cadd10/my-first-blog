@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<title>{{ debate.theme }} - AI議論バトル</title>
+<title>{{ debate.theme }} - AIクイズバトル</title>
 <style>
   body {
     font-family: -apple-system, "Hiragino Kaku Gothic ProN", sans-serif;
@@ -34,10 +34,23 @@
     line-height: 1.6;
     white-space: pre-wrap;
     box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    border: 2px solid transparent;
   }
   .side-A { align-self: flex-start; background: #d6ecff; border-bottom-left-radius: 2px; }
   .side-B { align-self: flex-end; background: #ffe3d6; border-bottom-right-radius: 2px; }
+  .bubble.verdict-correct { border-color: #2e9e4f; }
+  .bubble.verdict-incorrect { border-color: #c0392b; }
   .speaker { font-size: 0.8rem; font-weight: bold; margin-bottom: 4px; opacity: 0.7; }
+  .verdict-mark {
+    display: inline-block;
+    font-size: 0.75rem;
+    font-weight: bold;
+    padding: 1px 8px;
+    border-radius: 10px;
+    margin-left: 6px;
+  }
+  .verdict-mark.correct { background: #2e9e4f; color: #fff; }
+  .verdict-mark.incorrect { background: #c0392b; color: #fff; }
   #summary-box {
     display: none;
     background: #fff;
@@ -55,7 +68,7 @@
   <div id="timer">残り 3:00</div>
   <div id="chat"></div>
   <div id="summary-box">
-    <h2>議論のまとめ</h2>
+    <h2>クイズの結果</h2>
     <div id="summary-text"></div>
   </div>
 
@@ -80,7 +93,7 @@
     var remaining = duration - elapsed;
     var el = document.getElementById('timer');
     if (remaining <= 0) {
-      el.textContent = '議論終了';
+      el.textContent = 'クイズ終了';
       el.classList.add('done');
     } else {
       el.textContent = '残り ' + formatTime(remaining);
@@ -90,16 +103,23 @@
   function renderMessages(messages) {
     var chat = document.getElementById('chat');
     messages.forEach(function (m) {
-      var key = m.offset_seconds + '-' + m.side;
-      if (shown[key]) return;
-      shown[key] = true;
+      if (shown[m.sequence]) return;
+      shown[m.sequence] = true;
 
       var bubble = document.createElement('div');
       bubble.className = 'bubble side-' + m.side;
+      if (m.turn_type === 'verdict' && m.is_correct === true) bubble.classList.add('verdict-correct');
+      if (m.turn_type === 'verdict' && m.is_correct === false) bubble.classList.add('verdict-incorrect');
 
       var speaker = document.createElement('div');
       speaker.className = 'speaker';
-      speaker.textContent = m.side_label;
+      speaker.textContent = m.side_label + '・' + m.turn_type_label;
+      if (m.turn_type === 'verdict' && m.is_correct !== null) {
+        var mark = document.createElement('span');
+        mark.className = 'verdict-mark ' + (m.is_correct ? 'correct' : 'incorrect');
+        mark.textContent = m.is_correct ? '正解' : '不正解';
+        speaker.appendChild(mark);
+      }
       bubble.appendChild(speaker);
 
       var text = document.createElement('div');

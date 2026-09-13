@@ -6,7 +6,7 @@ from .models import Debate, DebateMessage
 class DebateMessageInline(admin.TabularInline):
     model = DebateMessage
     extra = 0
-    readonly_fields = ('side', 'content', 'offset_seconds')
+    readonly_fields = ('side', 'turn_type', 'content', 'is_correct', 'offset_seconds')
     can_delete = False
 
 

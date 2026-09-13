@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<title>AI議論バトル</title>
+<title>AIクイズバトル</title>
 <style>
   body {
     font-family: -apple-system, "Hiragino Kaku Gothic ProN", sans-serif;
@@ -49,17 +49,17 @@
 </style>
 </head>
 <body>
-  <h1>AI議論バトル</h1>
-  <p class="lead">テーマを入力すると、2体のAI(賛成派 / 反対派)が3分間議論します。</p>
+  <h1>AIクイズバトル</h1>
+  <p class="lead">テーマを入力すると、AI-A(出題者)がクイズを出題し、AI-B(回答者)が答えます。正誤判定もその場で行い、3分間で最大{{ total_questions }}問出題されます。</p>
 
   <form method="post">
     {% csrf_token %}
-    <input type="text" name="theme" placeholder="例: 在宅勤務は良い制度か" maxlength="200" required autofocus>
-    <button type="submit">議論を始める</button>
+    <input type="text" name="theme" placeholder="例: 日本の歴史" maxlength="200" required autofocus>
+    <button type="submit">クイズを始める</button>
   </form>
 
   {% if recent_debates %}
-  <h2>これまでの議論</h2>
+  <h2>これまでのクイズ</h2>
   <ul>
     {% for d in recent_debates %}
     <li>

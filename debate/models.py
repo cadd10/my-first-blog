@@ -22,13 +22,21 @@ class Debate(models.Model):
 
 class DebateMessage(models.Model):
     SIDE_CHOICES = [
-        ('A', 'AI-A(賛成派)'),
-        ('B', 'AI-B(反対派)'),
+        ('A', 'AI-A(出題者)'),
+        ('B', 'AI-B(回答者)'),
+    ]
+
+    TURN_TYPE_CHOICES = [
+        ('question', '出題'),
+        ('answer', '回答'),
+        ('verdict', '判定'),
     ]
 
     debate = models.ForeignKey(Debate, on_delete=models.CASCADE, related_name='messages')
     side = models.CharField(max_length=1, choices=SIDE_CHOICES)
+    turn_type = models.CharField(max_length=10, choices=TURN_TYPE_CHOICES, default='question')
     content = models.TextField(blank=True)
+    is_correct = models.BooleanField(null=True, blank=True)
     offset_seconds = models.PositiveIntegerField()
     sequence = models.PositiveIntegerField(default=0)
 
@@ -36,4 +44,4 @@ class DebateMessage(models.Model):
         ordering = ['offset_seconds']
 
     def __str__(self):
-        return f'[{self.side}] {self.content[:20]}'
+        return f'[{self.side}/{self.turn_type}] {self.content[:20]}'

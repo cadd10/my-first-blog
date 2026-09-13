@@ -15,7 +15,10 @@ def index(request):
             return redirect('debate_detail', pk=debate.pk)
 
     recent_debates = Debate.objects.all()[:10]
-    return render(request, 'debate/index.html', {'recent_debates': recent_debates})
+    return render(request, 'debate/index.html', {
+        'recent_debates': recent_debates,
+        'total_questions': debate_engine.TOTAL_QUESTIONS,
+    })
 
 
 def detail(request, pk):
@@ -45,9 +48,13 @@ def messages_api(request, pk):
         'finished': finished,
         'messages': [
             {
+                'sequence': message.sequence,
                 'side': message.side,
                 'side_label': message.get_side_display(),
+                'turn_type': message.turn_type,
+                'turn_type_label': message.get_turn_type_display(),
                 'content': message.content,
+                'is_correct': message.is_correct,
                 'offset_seconds': message.offset_seconds,
             }
             for message in due_messages
