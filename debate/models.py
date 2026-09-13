@@ -28,8 +28,9 @@ class DebateMessage(models.Model):
 
     debate = models.ForeignKey(Debate, on_delete=models.CASCADE, related_name='messages')
     side = models.CharField(max_length=1, choices=SIDE_CHOICES)
-    content = models.TextField()
+    content = models.TextField(blank=True)
     offset_seconds = models.PositiveIntegerField()
+    sequence = models.PositiveIntegerField(default=0)
 
     class Meta:
         ordering = ['offset_seconds']

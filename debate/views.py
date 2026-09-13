@@ -2,7 +2,7 @@ from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 
-from .debate_engine import generate_debate
+from . import debate_engine
 from .models import Debate
 
 
@@ -11,7 +11,7 @@ def index(request):
         theme = request.POST.get('theme', '').strip()
         if theme:
             debate = Debate.objects.create(theme=theme)
-            generate_debate(debate)
+            debate_engine.schedule_turns(debate)
             return redirect('debate_detail', pk=debate.pk)
 
     recent_debates = Debate.objects.all()[:10]
@@ -32,7 +32,12 @@ def messages_api(request, pk):
     elapsed = max(0, min(elapsed, debate.duration_seconds))
     finished = elapsed >= debate.duration_seconds
 
-    visible_messages = debate.messages.filter(offset_seconds__lte=elapsed)
+    due_messages = list(debate.messages.filter(offset_seconds__lte=elapsed).order_by('sequence'))
+    for message in due_messages:
+        if not message.content:
+            debate_engine.ensure_generated(message)
+
+    summary = debate_engine.ensure_summary(debate) if finished else ''
 
     return JsonResponse({
         'elapsed': elapsed,
@@ -45,7 +50,7 @@ def messages_api(request, pk):
                 'content': message.content,
                 'offset_seconds': message.offset_seconds,
             }
-            for message in visible_messages
+            for message in due_messages
         ],
-        'summary': debate.summary if finished else '',
+        'summary': summary,
     })

@@ -1,7 +1,12 @@
 import random
 
+from . import llm_client
 from .models import DebateMessage
 
+STANCE_LABELS = {'A': '賛成', 'B': '反対'}
+SIDE_LABELS = {'A': 'AI-A(賛成派)', 'B': 'AI-B(反対派)'}
+
+# Fallback phrasing used only when the local LLM server is unreachable.
 PRO_REASONS = [
     '多くの人にとって利便性が向上する',
     '長期的に見て社会全体の利益になる',
@@ -20,66 +25,122 @@ CON_REASONS = [
     '慎重な検討がまだ不十分だ',
 ]
 
-REBUTTAL_ROUNDS = 4
+TOTAL_TURNS = 12  # opening x2 + 4 rebuttal rounds x2 + closing x2
 
 
-def _pick(pool, used):
-    available = [item for item in pool if item not in used]
-    if not available:
-        available = list(pool)
-    choice = random.choice(available)
-    used.add(choice)
-    return choice
+def schedule_turns(debate):
+    """Create the empty turn schedule (side + timing) for a debate.
 
-
-def _build_turns(theme):
-    used_pro, used_con = set(), set()
-    pro_open = _pick(PRO_REASONS, used_pro)
-    con_open = _pick(CON_REASONS, used_con)
-
-    turns = [
-        ('A', f'私は「{theme}」について賛成の立場です。{pro_open}という点で、大きなメリットがあると考えます。'),
-        ('B', f'私は「{theme}」について反対の立場です。{con_open}という点を懸念しています。'),
-    ]
-
-    for _ in range(REBUTTAL_ROUNDS):
-        pro_reason = _pick(PRO_REASONS, used_pro)
-        con_reason = _pick(CON_REASONS, used_con)
-        turns.append(('A', f'たしかにそのご指摘も一理ありますが、それでも{pro_reason}という理由から、私は賛成の立場を維持します。'))
-        turns.append(('B', f'そのお考えは理解できますが、{con_reason}という点から、私はやはり反対の立場です。'))
-
-    pro_close = _pick(PRO_REASONS, used_pro)
-    con_close = _pick(CON_REASONS, used_con)
-    turns.append(('A', f'以上の議論を踏まえ、私は改めて「{theme}」に賛成します。特に{pro_close}という点を強調して、議論を締めくくります。'))
-    turns.append(('B', f'様々な意見が出ましたが、私はやはり「{theme}」には反対です。とりわけ{con_close}という点を重く見るべきだと考えます。'))
-
-    return turns, pro_open, pro_close, con_open, con_close
-
-
-def generate_debate(debate):
-    """Pre-generate a full debate transcript and summary for the given Debate.
-
-    The whole exchange is created up front and spread across
-    ``debate.duration_seconds`` via each message's ``offset_seconds``; the
-    frontend reveals messages as real time passes to simulate a live debate.
+    Message content is intentionally left blank here and filled in later by
+    `ensure_generated`, once real time reaches each turn's offset - that way
+    creating a debate stays instant even though generating a turn means a
+    live call to the local LLM server.
     """
-    theme = debate.theme
-    duration = debate.duration_seconds
+    sides = []
+    for _ in range(TOTAL_TURNS // 2):
+        sides.append('A')
+        sides.append('B')
 
-    turns, pro_open, pro_close, con_open, con_close = _build_turns(theme)
-
-    step = duration / max(len(turns) - 1, 1)
+    step = debate.duration_seconds / max(len(sides) - 1, 1)
     messages = []
-    for i, (side, content) in enumerate(turns):
-        offset = min(int(round(i * step)), max(duration - 1, 0))
-        messages.append(DebateMessage(debate=debate, side=side, content=content, offset_seconds=offset))
+    for i, side in enumerate(sides):
+        offset = min(int(round(i * step)), max(debate.duration_seconds - 1, 0))
+        messages.append(DebateMessage(debate=debate, side=side, content='', offset_seconds=offset, sequence=i))
     DebateMessage.objects.bulk_create(messages)
 
-    debate.summary = (
+
+def _phase(sequence, total):
+    if sequence <= 1:
+        return 'opening'
+    if sequence >= total - 2:
+        return 'closing'
+    return 'rebuttal'
+
+
+def _fallback_turn(theme, side, phase):
+    pool = PRO_REASONS if side == 'A' else CON_REASONS
+    reason = random.choice(pool)
+    stance = STANCE_LABELS[side]
+    if phase == 'opening':
+        return f'私は「{theme}」について{stance}の立場です。{reason}という点で、大きな意味があると考えます。'
+    if phase == 'closing':
+        return f'以上の議論を踏まえ、私は改めて「{theme}」に{stance}します。特に{reason}という点を強調して、議論を締めくくります。'
+    return f'そのご意見も理解できますが、それでも{reason}という理由から、私はやはり{stance}の立場です。'
+
+
+def _fallback_summary(theme):
+    return (
         f'テーマ「{theme}」について、AI同士が議論を行いました。\n\n'
-        f'AI-A(賛成派)は「{pro_open}」「{pro_close}」といった理由から、一貫して賛成の立場を取りました。\n'
-        f'AI-B(反対派)は「{con_open}」「{con_close}」といった理由から、一貫して反対の立場を取りました。\n\n'
-        f'双方に説得力のある論点があり、「{theme}」については立場によって評価が分かれる、'
-        f'一長一短のテーマであると言えるでしょう。'
+        '双方に説得力のある論点があり、立場によって評価が分かれる、一長一短のテーマであると言えるでしょう。'
     )
-    debate.save()
+
+
+def _build_transcript(messages):
+    lines = [f'{SIDE_LABELS[m.side]}: {m.content}' for m in messages if m.content]
+    return '\n'.join(lines)
+
+
+def ensure_generated(message):
+    """Fill in a scheduled message's content, generating it now if needed."""
+    if message.content:
+        return message.content
+
+    debate = message.debate
+    phase = _phase(message.sequence, TOTAL_TURNS)
+    stance = STANCE_LABELS[message.side]
+    prior_messages = debate.messages.filter(sequence__lt=message.sequence).order_by('sequence')
+    transcript = _build_transcript(prior_messages)
+
+    system_prompt = (
+        f'あなたはディベートAIです。テーマ「{debate.theme}」について{stance}の立場を最後まで貫いてください。'
+        '相手の発言があれば具体的に踏まえて反応し、日本語で2〜3文程度の簡潔な発言だけを出力してください。'
+        '前置きや自己紹介、相手の発言の引用は不要です。'
+    )
+    if phase == 'opening':
+        instruction = 'これはあなたの最初の発言です。テーマに対するあなたの意見を述べてください。'
+    elif phase == 'closing':
+        instruction = 'これが最後の発言です。これまでの議論を踏まえて、簡潔に締めくくってください。'
+    else:
+        instruction = '相手の直前の発言に反論しつつ、あなたの立場を維持してください。'
+
+    user_prompt = (f'これまでの議論:\n{transcript}\n\n' if transcript else '') + instruction
+
+    try:
+        content = llm_client.chat(system_prompt, user_prompt)
+        if not content:
+            raise llm_client.LLMUnavailable('empty response')
+    except llm_client.LLMUnavailable:
+        content = _fallback_turn(debate.theme, message.side, phase)
+
+    message.content = content
+    message.save(update_fields=['content'])
+    return content
+
+
+def ensure_summary(debate):
+    if debate.summary:
+        return debate.summary
+
+    all_messages = debate.messages.order_by('sequence')
+    transcript = _build_transcript(all_messages)
+
+    system_prompt = (
+        f'あなたは公平なモデレーターです。以下は「{debate.theme}」というテーマについて、'
+        '賛成派(AI-A)と反対派(AI-B)が行った議論の全文です。'
+    )
+    user_prompt = (
+        f'{transcript}\n\n'
+        '両者の主張の要点をそれぞれ2〜3行でまとめ、最後に中立的な結論を1〜2行加えてください。'
+        '日本語で、見出しや箇条書き記号は使わず、自然な文章でまとめてください。'
+    )
+
+    try:
+        summary = llm_client.chat(system_prompt, user_prompt, max_tokens=400)
+        if not summary:
+            raise llm_client.LLMUnavailable('empty summary')
+    except llm_client.LLMUnavailable:
+        summary = _fallback_summary(debate.theme)
+
+    debate.summary = summary
+    debate.save(update_fields=['summary'])
+    return summary
