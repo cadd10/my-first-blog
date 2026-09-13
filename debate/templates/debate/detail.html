@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>{{ debate.theme }} - AIクイズバトル</title>
+<style>
+  body {
+    font-family: -apple-system, "Hiragino Kaku Gothic ProN", sans-serif;
+    max-width: 720px;
+    margin: 40px auto;
+    padding: 0 16px;
+    background: #f5f6fa;
+    color: #222;
+  }
+  a.back { display: inline-block; margin-bottom: 16px; color: #3b6fe0; text-decoration: none; }
+  h1 { font-size: 1.4rem; }
+  #timer {
+    font-size: 1.2rem;
+    font-weight: bold;
+    margin-bottom: 16px;
+    color: #3b6fe0;
+  }
+  #timer.done { color: #c0392b; }
+  #chat {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: 24px;
+  }
+  .bubble {
+    max-width: 80%;
+    padding: 12px 16px;
+    border-radius: 14px;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    border: 2px solid transparent;
+  }
+  .side-A { align-self: flex-start; background: #d6ecff; border-bottom-left-radius: 2px; }
+  .side-B { align-self: flex-end; background: #ffe3d6; border-bottom-right-radius: 2px; }
+  .bubble.verdict-correct { border-color: #2e9e4f; }
+  .bubble.verdict-incorrect { border-color: #c0392b; }
+  .speaker { font-size: 0.8rem; font-weight: bold; margin-bottom: 4px; opacity: 0.7; }
+  .verdict-mark {
+    display: inline-block;
+    font-size: 0.75rem;
+    font-weight: bold;
+    padding: 1px 8px;
+    border-radius: 10px;
+    margin-left: 6px;
+  }
+  .verdict-mark.correct { background: #2e9e4f; color: #fff; }
+  .verdict-mark.incorrect { background: #c0392b; color: #fff; }
+  #summary-box {
+    display: none;
+    background: #fff;
+    border-radius: 12px;
+    padding: 16px 20px;
+    white-space: pre-wrap;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+  }
+  #summary-box h2 { margin-top: 0; font-size: 1.1rem; }
+</style>
+</head>
+<body>
+  <a class="back" href="{% url 'debate_index' %}">&larr; トップに戻る</a>
+  <h1>テーマ: {{ debate.theme }}</h1>
+  <div id="timer">残り 3:00</div>
+  <div id="chat"></div>
+  <div id="summary-box">
+    <h2>クイズの結果</h2>
+    <div id="summary-text"></div>
+  </div>
+
+<script>
+(function () {
+  var debateId = {{ debate.pk }};
+  var duration = {{ duration_seconds }};
+  var startTime = new Date("{{ debate.created_date.isoformat }}").getTime();
+  var shown = {};
+  var finished = false;
+  var pollTimer = null;
+
+  function formatTime(sec) {
+    sec = Math.max(0, Math.round(sec));
+    var m = Math.floor(sec / 60);
+    var s = sec % 60;
+    return m + ':' + (s < 10 ? '0' : '') + s;
+  }
+
+  function tickTimer() {
+    var el = document.getElementById('timer');
+    if (finished) {
+      el.textContent = 'クイズ終了';
+      el.classList.add('done');
+      return;
+    }
+    var elapsed = (Date.now() - startTime) / 1000;
+    var remaining = duration - elapsed;
+    if (remaining <= 0) {
+      el.textContent = 'AIが回答を生成中です…もうしばらくお待ちください';
+    } else {
+      el.textContent = '残り ' + formatTime(remaining);
+    }
+  }
+
+  function renderMessages(messages) {
+    var chat = document.getElementById('chat');
+    messages.forEach(function (m) {
+      if (shown[m.sequence]) return;
+      shown[m.sequence] = true;
+
+      var bubble = document.createElement('div');
+      bubble.className = 'bubble side-' + m.side;
+      if (m.turn_type === 'verdict' && m.is_correct === true) bubble.classList.add('verdict-correct');
+      if (m.turn_type === 'verdict' && m.is_correct === false) bubble.classList.add('verdict-incorrect');
+
+      var speaker = document.createElement('div');
+      speaker.className = 'speaker';
+      speaker.textContent = m.side_label + '・' + m.turn_type_label;
+      if (m.turn_type === 'verdict' && m.is_correct !== null) {
+        var mark = document.createElement('span');
+        mark.className = 'verdict-mark ' + (m.is_correct ? 'correct' : 'incorrect');
+        mark.textContent = m.is_correct ? '正解' : '不正解';
+        speaker.appendChild(mark);
+      }
+      bubble.appendChild(speaker);
+
+      var text = document.createElement('div');
+      text.textContent = m.content;
+      bubble.appendChild(text);
+
+      chat.appendChild(bubble);
+    });
+    chat.scrollTop = chat.scrollHeight;
+  }
+
+  function showSummary(summary) {
+    document.getElementById('summary-text').textContent = summary;
+    document.getElementById('summary-box').style.display = 'block';
+  }
+
+  function poll() {
+    fetch('/debate/' + debateId + '/messages/')
+      .then(function (res) { return res.json(); })
+      .then(function (data) {
+        renderMessages(data.messages);
+        if (data.finished) {
+          finished = true;
+          tickTimer();
+          showSummary(data.summary);
+          return;
+        }
+        pollTimer = setTimeout(poll, 2000);
+      })
+      .catch(function (err) {
+        console.error(err);
+        pollTimer = setTimeout(poll, 2000);
+      });
+  }
+
+  setInterval(function () {
+    if (!finished) tickTimer();
+  }, 1000);
+  tickTimer();
+  poll();
+})();
+</script>
+</body>
+</html>

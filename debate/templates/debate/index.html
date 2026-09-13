@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>AIクイズバトル</title>
+<style>
+  body {
+    font-family: -apple-system, "Hiragino Kaku Gothic ProN", sans-serif;
+    max-width: 640px;
+    margin: 40px auto;
+    padding: 0 16px;
+    background: #f5f6fa;
+    color: #222;
+  }
+  h1 { font-size: 1.6rem; }
+  p.lead { color: #555; }
+  form {
+    display: flex;
+    gap: 8px;
+    margin: 24px 0;
+  }
+  input[type="text"] {
+    flex: 1;
+    padding: 10px 12px;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    font-size: 1rem;
+  }
+  button {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 8px;
+    background: #3b6fe0;
+    color: #fff;
+    font-size: 1rem;
+    cursor: pointer;
+  }
+  button:hover { background: #2f5bc0; }
+  ul { list-style: none; padding: 0; }
+  li {
+    background: #fff;
+    padding: 12px 16px;
+    border-radius: 8px;
+    margin-bottom: 8px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  }
+  li a { text-decoration: none; color: #3b6fe0; font-weight: bold; }
+  li .date { display: block; font-size: 0.8rem; color: #888; margin-top: 2px; }
+</style>
+</head>
+<body>
+  <h1>AIクイズバトル</h1>
+  <p class="lead">テーマを入力すると、AI-A(出題者)がクイズを出題し、AI-B(回答者)が答えます。正誤判定もその場で行い、3分間で最大{{ total_questions }}問出題されます。</p>
+
+  <form method="post">
+    {% csrf_token %}
+    <input type="text" name="theme" placeholder="例: 日本の歴史" maxlength="200" required autofocus>
+    <button type="submit">クイズを始める</button>
+  </form>
+
+  {% if recent_debates %}
+  <h2>これまでのクイズ</h2>
+  <ul>
+    {% for d in recent_debates %}
+    <li>
+      <a href="{% url 'debate_detail' d.pk %}">{{ d.theme }}</a>
+      <span class="date">{{ d.created_date }}</span>
+    </li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+</body>
+</html>
