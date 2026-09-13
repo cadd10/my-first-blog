@@ -5,7 +5,7 @@ import urllib.request
 
 LM_STUDIO_BASE_URL = os.environ.get('LM_STUDIO_BASE_URL', 'http://localhost:1234/v1')
 LM_STUDIO_MODEL = os.environ.get('LM_STUDIO_MODEL', 'local-model')
-REQUEST_TIMEOUT_SECONDS = 30
+REQUEST_TIMEOUT_SECONDS = int(os.environ.get('LM_STUDIO_TIMEOUT_SECONDS', '90'))
 
 
 class LLMUnavailable(Exception):

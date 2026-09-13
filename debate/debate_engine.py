@@ -80,7 +80,8 @@ def _generate_question(debate, message):
         content = llm_client.chat(system_prompt, user_prompt)
         if not content:
             raise llm_client.LLMUnavailable('empty response')
-    except llm_client.LLMUnavailable:
+    except llm_client.LLMUnavailable as exc:
+        print(f'[debate] question generation fell back to template: {exc}')
         content = _fallback_question(debate.theme)
 
     message.content = content
@@ -103,7 +104,8 @@ def _generate_answer(debate, message):
         content = llm_client.chat(system_prompt, user_prompt)
         if not content:
             raise llm_client.LLMUnavailable('empty response')
-    except llm_client.LLMUnavailable:
+    except llm_client.LLMUnavailable as exc:
+        print(f'[debate] answer generation fell back to template: {exc}')
         content = _fallback_answer()
 
     message.content = content
@@ -136,7 +138,8 @@ def _generate_verdict(debate, message):
         else:
             is_correct = None
         content = raw
-    except llm_client.LLMUnavailable:
+    except llm_client.LLMUnavailable as exc:
+        print(f'[debate] verdict generation fell back to template: {exc}')
         content, is_correct = _fallback_verdict()
 
     message.content = content
