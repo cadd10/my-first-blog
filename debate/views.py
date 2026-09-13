@@ -30,16 +30,26 @@ def detail(request, pk):
 
 
 def messages_api(request, pk):
+    """Return everything generated so far, generating one more turn if needed.
+
+    Turns are no longer paced against a fixed wall-clock schedule - local
+    LLM generation speed varies wildly by hardware/model, and a strict
+    per-turn time slot meant a slow model could burn through the whole
+    quiz duration on just the first question. Instead, each poll advances
+    the quiz by generating the single next pending turn (if any), so the
+    quiz always finishes once every turn has content, however long that
+    takes - `duration_seconds` is only a display hint for the countdown.
+    """
     debate = get_object_or_404(Debate, pk=pk)
     elapsed = (timezone.now() - debate.created_date).total_seconds()
-    elapsed = max(0, min(elapsed, debate.duration_seconds))
-    finished = elapsed >= debate.duration_seconds
 
-    due_messages = list(debate.messages.filter(offset_seconds__lte=elapsed).order_by('sequence'))
-    for message in due_messages:
-        if not message.content:
-            debate_engine.ensure_generated(message)
+    all_messages = list(debate.messages.order_by('sequence'))
+    next_pending = next((m for m in all_messages if not m.content), None)
+    if next_pending is not None:
+        debate_engine.ensure_generated(next_pending)
 
+    finished = all(m.content for m in all_messages)
+    visible_messages = [m for m in all_messages if m.content]
     summary = debate_engine.ensure_summary(debate) if finished else ''
 
     return JsonResponse({
@@ -57,7 +67,7 @@ def messages_api(request, pk):
                 'is_correct': message.is_correct,
                 'offset_seconds': message.offset_seconds,
             }
-            for message in due_messages
+            for message in visible_messages
         ],
         'summary': summary,
     })

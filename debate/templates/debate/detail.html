@@ -89,12 +89,16 @@
   }
 
   function tickTimer() {
-    var elapsed = (Date.now() - startTime) / 1000;
-    var remaining = duration - elapsed;
     var el = document.getElementById('timer');
-    if (remaining <= 0) {
+    if (finished) {
       el.textContent = 'クイズ終了';
       el.classList.add('done');
+      return;
+    }
+    var elapsed = (Date.now() - startTime) / 1000;
+    var remaining = duration - elapsed;
+    if (remaining <= 0) {
+      el.textContent = 'AIが回答を生成中です…もうしばらくお待ちください';
     } else {
       el.textContent = '残り ' + formatTime(remaining);
     }
